@@ -1,0 +1,19 @@
+{
+    "name": "mio-plugin/qrcode-generator",
+    "description": "WordPress plugin per la generazione di QR code con logo",
+    "type": "wordpress-plugin",
+    "require": {
+        "php": ">=7.4",
+        "endroid/qr-code": "^4.0 || ^5.0",
+        "claviska/simpleimage": "^4.1"
+    },
+    "autoload": {
+        "psr-4": {}
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "platform": {
+            "php": "7.4"
+        }
+    }
+}
