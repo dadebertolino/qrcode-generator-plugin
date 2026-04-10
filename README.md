@@ -5,7 +5,7 @@
 ![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4?logo=php&logoColor=white)
 ![WordPress](https://img.shields.io/badge/WordPress-5.8%2B-21759b?logo=wordpress&logoColor=white)
 ![License](https://img.shields.io/badge/License-GPL2-green)
-![Version](https://img.shields.io/badge/Version-1.1.0-blue)
+![Version](https://img.shields.io/badge/Version-1.2.0-blue)
 [![Release](https://img.shields.io/github/v/release/dadebertolino/qrcode-generator-plugin)](https://github.com/dadebertolino/qrcode-generator-plugin/releases/latest)
 
 ---
@@ -20,6 +20,7 @@
 - Rate limiting per richieste pubbliche (10 req/IP ogni 60s)
 - Pulizia automatica dei file generati (> 30 giorni)
 - Validazione MIME reale dei file caricati
+- Accessibilità WCAG 2.1 AA (ARIA, focus management, touch target)
 
 ---
 
@@ -35,24 +36,17 @@
 
 ## Installazione
 
-### Metodo alternativo — ZIP da GitHub Releases
+### Metodo consigliato — ZIP da GitHub Releases
 
 Scarica lo ZIP già compilato (con `vendor/` incluso) dalla pagina [Releases](https://github.com/dadebertolino/qrcode-generator-plugin/releases/latest) e installalo direttamente da WordPress: **Plugin → Aggiungi nuovo → Carica plugin**.
 
-### 1. Clona il repository
+### Da sorgente
 
 ```bash
 git clone https://github.com/dadebertolino/qrcode-generator-plugin.git wp-content/plugins/qrcode-generator-plugin
-```
-
-### 2. Installa le dipendenze
-
-```bash
 cd wp-content/plugins/qrcode-generator-plugin
 composer install --no-dev --optimize-autoloader
 ```
-
-### 3. Attiva il plugin
 
 Dal pannello WordPress: **Plugin → Plugin installati → QR Code Generator con Logo → Attiva**.
 
@@ -73,13 +67,9 @@ Dal pannello WordPress: **Plugin → Plugin installati → QR Code Generator con
 
 ### Shortcode generatore interattivo
 
-Inserisci in qualsiasi pagina o post:
-
 ```
-[qrcode_generator]
+[dbqr_generator]
 ```
-
-Opzioni disponibili:
 
 | Attributo | Default | Descrizione |
 |---|---|---|
@@ -89,21 +79,25 @@ Opzioni disponibili:
 **Esempi:**
 
 ```
-[qrcode_generator title="Crea il tuo QR" show_logo="no"]
-[qrcode_generator title="QR Code Personalizzato"]
+[dbqr_generator title="Crea il tuo QR" show_logo="no"]
+[dbqr_generator title="QR Code Personalizzato"]
 ```
+
+> **Retrocompatibilità:** lo shortcode `[qrcode_generator]` continua a funzionare.
 
 ### Shortcode QR code statico
 
 ```
-[qrcode url="https://example.com"]
-[qrcode url="https://example.com" size="400"]
+[dbqr_code url="https://example.com"]
+[dbqr_code url="https://example.com" size="400"]
 ```
 
 | Attributo | Default | Note |
 |---|---|---|
 | `url` | _(obbligatorio)_ | URL o testo da codificare |
 | `size` | `300` | Dimensione in pixel (100–1000) |
+
+> **Retrocompatibilità:** lo shortcode `[qrcode]` continua a funzionare.
 
 Il QR code viene generato una sola volta e poi servito dalla cache per 24 ore.
 
@@ -119,21 +113,26 @@ Vai su **QR Code** nel menu laterale di WordPress per generare QR code manualmen
 qrcode-generator-plugin/
 ├── .github/
 │   └── workflows/
-│       └── release.yml    # GitHub Action per build automatica
-├── qrcode-generator.php   # File principale del plugin
-├── composer.json          # Dipendenze Composer
-├── vendor/                # Librerie (generata da Composer, non in VCS)
+│       └── release.yml        # GitHub Action per build automatica
+├── assets/
+│   ├── css/
+│   │   └── frontend.css       # Stili frontend
+│   └── js/
+│       ├── admin.js           # Script pannello admin
+│       └── frontend.js        # Script shortcode frontend
+├── qrcode-generator.php       # File principale del plugin
+├── composer.json              # Dipendenze Composer
+├── LICENSE                    # Licenza GPL-2.0
+├── vendor/                    # Librerie (generata da Composer, non in VCS)
 ├── .gitignore
 └── README.md
 ```
-
-> La cartella `vendor/` è esclusa dal repository. Esegui sempre `composer install` dopo il clone.
 
 ---
 
 ## Sicurezza
 
-- **Nonce WordPress** — ogni richiesta AJAX (admin e frontend) è verificata con un nonce dedicato.
+- **Nonce WordPress** — ogni richiesta AJAX (admin e frontend) è verificata con un nonce dedicato (`dbqr_admin`, `dbqr_frontend`).
 - **Validazione MIME reale** — il tipo del file logo viene verificato con `finfo::file()` sul contenuto effettivo, non sull'estensione dichiarata dal client.
 - **Whitelist MIME** — sono accettati solo `image/png`, `image/jpeg`, `image/gif`, `image/webp`.
 - **Limite dimensione** — il logo non può superare 2 MB.
@@ -145,29 +144,30 @@ qrcode-generator-plugin/
 
 ## Changelog
 
+### 1.2.0
+- **Refactoring completo** — applicato prefisso `dbqr_` a costanti, classi, hook, AJAX, transient, CSS, JS
+- **Fix header plugin** — Author, Author URI, Plugin URI, Text Domain corretti
+- **Estratti CSS/JS** — stili e script spostati in `assets/css/` e `assets/js/`, caricati solo dove servono
+- **Accessibilità WCAG 2.1 AA** — `aria-required`, `aria-describedby`, `role="alert"`, `aria-live`, `focus-visible`, touch target 44px, `prefers-reduced-motion`
+- **Localizzazione** — tutte le stringhe utente wrappate con `__()` / `_e()` e text domain `qrcode-generator`
+- **Retrocompatibilità** — shortcode `[qrcode]` e `[qrcode_generator]` mantenuti come alias
+- **Aggiunto** file `LICENSE` GPL-2.0
+
 ### 1.1.0
-- **Fix critico** — rimosso bypass nonce AJAX lato frontend; aggiunto nonce dedicato `qrcode_frontend`
+- **Fix critico** — rimosso bypass nonce AJAX lato frontend; aggiunto nonce dedicato
 - **Fix critico** — `logoPath()` ora riceve un percorso file temporaneo anziché un data URI
 - **Fix critico** — validazione MIME reale del logo con `finfo`
-- **Fix** — autoload Composer spostato a livello di file (prima del parsing dei `use`)
-- **Aggiunto** — rate limiting per richieste pubbliche
-- **Aggiunto** — caching QR code tramite transient WordPress (24h)
-- **Aggiunto** — pulizia automatica cron dei file QR vecchi (> 30 giorni)
-- **Aggiunto** — protezione directory listing con `.htaccess`
-- **Aggiunto** — verifica versione PHP e dipendenze all'attivazione
+- **Fix** — autoload Composer spostato a livello di file
+- **Aggiunto** — rate limiting, caching, pulizia cron, protezione directory, verifica attivazione
 
 ### 1.0.0
 - Release iniziale
 
 ---
 
-## Contribuire
+## Autore
 
-1. Fai un fork del repository
-2. Crea un branch per la tua feature: `git checkout -b feature/nome-feature`
-3. Committa le modifiche: `git commit -m 'Aggiunge nome-feature'`
-4. Pusha il branch: `git push origin feature/nome-feature`
-5. Apri una Pull Request
+**Davide Bertolino** — [davidebertolino.it](https://www.davidebertolino.it) — info@davidebertolino.it
 
 ---
 

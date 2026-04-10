@@ -1,11 +1,13 @@
 <?php
 /**
  * Plugin Name: QR Code Generator con Logo
- * Plugin URI:  https://example.com
+ * Plugin URI:  https://www.davidebertolino.it/progetti/qrcode-generator/
  * Description: Genera QR code personalizzati con logo centrale
- * Version:     1.1.0
- * Author:      Il Tuo Nome
+ * Version:     1.2.0
+ * Author:      Davide Bertolino
+ * Author URI:  https://www.davidebertolino.it
  * License:     GPL2
+ * Text Domain: qrcode-generator
  * Requires at least: 5.8
  * Requires PHP: 7.4
  */
@@ -27,9 +29,8 @@ if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
 }
 
 // ─── Autoload Composer ───────────────────────────────────────────────────────
-// Caricato subito, a livello di file, prima che PHP analizzi i "use" della classe.
-$autoload = plugin_dir_path( __FILE__ ) . 'vendor/autoload.php';
-if ( ! file_exists( $autoload ) ) {
+$dbqr_autoload = plugin_dir_path( __FILE__ ) . 'vendor/autoload.php';
+if ( ! file_exists( $dbqr_autoload ) ) {
     add_action( 'admin_notices', function () {
         echo '<div class="notice notice-error"><p>'
            . '<strong>QR Code Generator</strong>: dipendenze Composer mancanti. '
@@ -38,7 +39,7 @@ if ( ! file_exists( $autoload ) ) {
     } );
     return;
 }
-require_once $autoload;
+require_once $dbqr_autoload;
 
 // ─── Namespace imports ───────────────────────────────────────────────────────
 use Endroid\QrCode\Builder\Builder;
@@ -48,16 +49,16 @@ use Endroid\QrCode\Writer\PngWriter;
 use claviska\SimpleImage;
 
 // ─── Costanti ────────────────────────────────────────────────────────────────
-define( 'QRCODE_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
-define( 'QRCODE_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
-define( 'QRCODE_VERSION',    '1.1.0' );
+define( 'DBQR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+define( 'DBQR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+define( 'DBQR_VERSION',    '1.2.0' );
 
 // ─── Hook attivazione / disattivazione ───────────────────────────────────────
-register_activation_hook( __FILE__, array( 'QRCode_Generator_Plugin', 'on_activate' ) );
-register_deactivation_hook( __FILE__, array( 'QRCode_Generator_Plugin', 'on_deactivate' ) );
+register_activation_hook( __FILE__, array( 'DBQR_Plugin', 'on_activate' ) );
+register_deactivation_hook( __FILE__, array( 'DBQR_Plugin', 'on_deactivate' ) );
 
 // ─── Classe principale ───────────────────────────────────────────────────────
-class QRCode_Generator_Plugin {
+class DBQR_Plugin {
 
     /** MIME type ammessi per il logo */
     private const ALLOWED_MIME = array( 'image/png', 'image/jpeg', 'image/gif', 'image/webp' );
@@ -66,15 +67,19 @@ class QRCode_Generator_Plugin {
     private const RATE_LIMIT = 10;
 
     public function __construct() {
-        add_action( 'admin_menu',       array( $this, 'add_admin_menu' ) );
-        add_shortcode( 'qrcode',            array( $this, 'qrcode_shortcode' ) );
-        add_shortcode( 'qrcode_generator',  array( $this, 'qrcode_generator_shortcode' ) );
-        add_action( 'wp_ajax_generate_qrcode',        array( $this, 'ajax_generate_qrcode' ) );
-        add_action( 'wp_ajax_nopriv_generate_qrcode', array( $this, 'ajax_generate_qrcode' ) );
-        add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_assets' ) );
+        add_action( 'admin_menu',            array( $this, 'add_admin_menu' ) );
+        add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
+        add_shortcode( 'dbqr_code',          array( $this, 'dbqr_code_shortcode' ) );
+        add_shortcode( 'dbqr_generator',     array( $this, 'dbqr_generator_shortcode' ) );
+        // Retrocompatibilità shortcode vecchi
+        add_shortcode( 'qrcode',             array( $this, 'dbqr_code_shortcode' ) );
+        add_shortcode( 'qrcode_generator',   array( $this, 'dbqr_generator_shortcode' ) );
+        add_action( 'wp_ajax_dbqr_generate',        array( $this, 'ajax_generate' ) );
+        add_action( 'wp_ajax_nopriv_dbqr_generate',  array( $this, 'ajax_generate' ) );
+        add_action( 'wp_enqueue_scripts',    array( $this, 'enqueue_frontend_assets' ) );
 
         // Pulizia notturna dei QR code vecchi (> 30 giorni)
-        add_action( 'qrcode_cleanup_event', array( $this, 'cleanup_old_files' ) );
+        add_action( 'dbqr_cleanup_event', array( $this, 'cleanup_old_files' ) );
     }
 
     // ── Attivazione ──────────────────────────────────────────────────────────
@@ -82,38 +87,57 @@ class QRCode_Generator_Plugin {
     public static function on_activate() {
         if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
             deactivate_plugins( plugin_basename( __FILE__ ) );
-            wp_die( 'QR Code Generator richiede PHP 7.4 o superiore.' );
+            wp_die( __( 'QR Code Generator richiede PHP 7.4 o superiore.', 'qrcode-generator' ) );
         }
-        if ( ! file_exists( QRCODE_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
+        if ( ! file_exists( DBQR_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
             deactivate_plugins( plugin_basename( __FILE__ ) );
-            wp_die( 'Esegui "composer install" prima di attivare il plugin.' );
+            wp_die( __( 'Esegui "composer install" prima di attivare il plugin.', 'qrcode-generator' ) );
         }
         // Crea cartella upload
         $upload = wp_upload_dir();
         wp_mkdir_p( $upload['basedir'] . '/qrcodes' );
 
         // Pianifica pulizia se non già schedulata
-        if ( ! wp_next_scheduled( 'qrcode_cleanup_event' ) ) {
-            wp_schedule_event( time(), 'daily', 'qrcode_cleanup_event' );
+        if ( ! wp_next_scheduled( 'dbqr_cleanup_event' ) ) {
+            wp_schedule_event( time(), 'daily', 'dbqr_cleanup_event' );
         }
     }
 
     public static function on_deactivate() {
-        wp_clear_scheduled_hook( 'qrcode_cleanup_event' );
+        wp_clear_scheduled_hook( 'dbqr_cleanup_event' );
     }
 
     // ── Admin menu ───────────────────────────────────────────────────────────
 
     public function add_admin_menu() {
         add_menu_page(
-            'QR Code Generator',
-            'QR Code',
+            __( 'QR Code Generator', 'qrcode-generator' ),
+            __( 'QR Code', 'qrcode-generator' ),
             'manage_options',
-            'qrcode-generator',
+            'dbqr-generator',
             array( $this, 'admin_page' ),
             'dashicons-grid-view',
             30
         );
+    }
+
+    // ── Admin assets ─────────────────────────────────────────────────────────
+
+    public function enqueue_admin_assets( $hook ) {
+        if ( strpos( $hook, 'dbqr-generator' ) === false ) {
+            return;
+        }
+        wp_enqueue_script(
+            'dbqr-admin',
+            DBQR_PLUGIN_URL . 'assets/js/admin.js',
+            array( 'jquery' ),
+            DBQR_VERSION,
+            true
+        );
+        wp_localize_script( 'dbqr-admin', 'dbqr_admin', array(
+            'ajax_url' => admin_url( 'admin-ajax.php' ),
+            'nonce'    => wp_create_nonce( 'dbqr_admin' ),
+        ) );
     }
 
     // ── Frontend assets ──────────────────────────────────────────────────────
@@ -123,38 +147,29 @@ class QRCode_Generator_Plugin {
         if ( ! is_a( $post, 'WP_Post' ) ) {
             return;
         }
-        if ( ! has_shortcode( $post->post_content, 'qrcode_generator' ) ) {
+        if ( ! has_shortcode( $post->post_content, 'dbqr_generator' )
+          && ! has_shortcode( $post->post_content, 'qrcode_generator' ) ) {
             return;
         }
 
-        wp_enqueue_script( 'jquery' );
-        wp_localize_script( 'jquery', 'qrcode_ajax', array(
+        wp_enqueue_style(
+            'dbqr-frontend',
+            DBQR_PLUGIN_URL . 'assets/css/frontend.css',
+            array(),
+            DBQR_VERSION
+        );
+
+        wp_enqueue_script(
+            'dbqr-frontend',
+            DBQR_PLUGIN_URL . 'assets/js/frontend.js',
+            array( 'jquery' ),
+            DBQR_VERSION,
+            true
+        );
+        wp_localize_script( 'dbqr-frontend', 'dbqr_front', array(
             'ajax_url' => admin_url( 'admin-ajax.php' ),
-            // FIX: nonce dedicato per il frontend
-            'nonce'    => wp_create_nonce( 'qrcode_frontend' ),
+            'nonce'    => wp_create_nonce( 'dbqr_frontend' ),
         ) );
-
-        wp_add_inline_style( 'wp-block-library', $this->frontend_css() );
-    }
-
-    private function frontend_css() {
-        return '
-            .qrcode-generator-form{max-width:600px;margin:0 auto;padding:20px;background:#f9f9f9;border-radius:8px}
-            .qrcode-form-group{margin-bottom:20px}
-            .qrcode-form-group label{display:block;margin-bottom:8px;font-weight:bold}
-            .qrcode-form-group input[type="text"],.qrcode-form-group input[type="number"]{width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box}
-            .qrcode-form-group input[type="file"]{width:100%}
-            .qrcode-description{font-size:.9em;color:#666;margin-top:5px}
-            .qrcode-submit-btn{background:#0073aa;color:#fff;padding:12px 30px;border:none;border-radius:4px;cursor:pointer;font-size:16px}
-            .qrcode-submit-btn:hover{background:#005177}
-            .qrcode-submit-btn:disabled{background:#ccc;cursor:not-allowed}
-            .qrcode-result{margin-top:30px;padding:20px;background:#fff;border-radius:8px;text-align:center}
-            .qrcode-result img{max-width:100%;height:auto;margin:20px 0}
-            .qrcode-download-btn{display:inline-block;background:#0073aa;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;margin-top:10px}
-            .qrcode-download-btn:hover{background:#005177}
-            .qrcode-error{color:red;padding:15px;background:#ffebee;border-radius:4px;margin-top:20px}
-            .qrcode-shortcode-box{background:#f0f0f0;padding:10px;border-radius:4px;margin-top:15px;font-family:monospace}
-        ';
     }
 
     // ── Pagina admin ─────────────────────────────────────────────────────────
@@ -162,107 +177,96 @@ class QRCode_Generator_Plugin {
     public function admin_page() {
         ?>
         <div class="wrap">
-            <h1>Generatore QR Code con Logo</h1>
+            <h1><?php esc_html_e( 'Generatore QR Code con Logo', 'qrcode-generator' ); ?></h1>
 
-            <form id="qrcode-form" method="post" enctype="multipart/form-data">
+            <form id="dbqr-form" method="post" enctype="multipart/form-data">
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><label for="qr_url">URL/Testo</label></th>
+                        <th scope="row">
+                            <label for="dbqr-url"><?php esc_html_e( 'URL/Testo', 'qrcode-generator' ); ?></label>
+                        </th>
                         <td>
-                            <input type="text" id="qr_url" name="qr_url" class="regular-text"
-                                   placeholder="https://example.com" required>
-                            <p class="description">Inserisci l'URL o il testo per il QR code</p>
+                            <input type="text" id="dbqr-url" name="qr_url" class="regular-text"
+                                   placeholder="https://example.com"
+                                   required
+                                   aria-required="true"
+                                   aria-describedby="dbqr-url-desc">
+                            <p class="description" id="dbqr-url-desc">
+                                <?php esc_html_e( 'Inserisci l\'URL o il testo per il QR code', 'qrcode-generator' ); ?>
+                            </p>
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row"><label for="qr_logo">Logo</label></th>
+                        <th scope="row">
+                            <label for="dbqr-logo"><?php esc_html_e( 'Logo', 'qrcode-generator' ); ?></label>
+                        </th>
                         <td>
-                            <input type="file" id="qr_logo" name="qr_logo" accept="image/png,image/jpeg,image/gif,image/webp">
-                            <p class="description">PNG, JPG, GIF o WebP — max 2 MB (opzionale)</p>
+                            <input type="file" id="dbqr-logo" name="qr_logo"
+                                   accept="image/png,image/jpeg,image/gif,image/webp"
+                                   aria-describedby="dbqr-logo-desc">
+                            <p class="description" id="dbqr-logo-desc">
+                                <?php esc_html_e( 'PNG, JPG, GIF o WebP — max 2 MB (opzionale)', 'qrcode-generator' ); ?>
+                            </p>
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row"><label for="qr_size">Dimensione (px)</label></th>
+                        <th scope="row">
+                            <label for="dbqr-size"><?php esc_html_e( 'Dimensione (px)', 'qrcode-generator' ); ?></label>
+                        </th>
                         <td>
-                            <input type="number" id="qr_size" name="qr_size" value="300" min="100" max="1000">
-                            <p class="description">100 – 1000 pixel</p>
+                            <input type="number" id="dbqr-size" name="qr_size" value="300"
+                                   min="100" max="1000"
+                                   aria-describedby="dbqr-size-desc">
+                            <p class="description" id="dbqr-size-desc">
+                                <?php esc_html_e( '100 – 1000 pixel', 'qrcode-generator' ); ?>
+                            </p>
                         </td>
                     </tr>
                 </table>
 
-                <?php wp_nonce_field( 'qrcode_generate', 'qrcode_nonce' ); ?>
+                <?php wp_nonce_field( 'dbqr_admin', 'dbqr_nonce' ); ?>
 
                 <p class="submit">
-                    <button type="button" id="generate-btn" class="button button-primary">Genera QR Code</button>
+                    <button type="button" id="dbqr-generate-btn" class="button button-primary">
+                        <?php esc_html_e( 'Genera QR Code', 'qrcode-generator' ); ?>
+                    </button>
                 </p>
             </form>
 
-            <div id="qrcode-result" style="margin-top:30px;display:none">
-                <h2>QR Code Generato</h2>
-                <div id="qrcode-preview"></div>
-                <p><a id="qrcode-download" class="button" download="qrcode.png">Scarica QR Code</a></p>
-                <p><strong>Shortcode:</strong> <code id="qrcode-shortcode"></code></p>
+            <div id="dbqr-result" style="margin-top:30px;display:none" role="region"
+                 aria-live="polite" aria-label="<?php esc_attr_e( 'Risultato QR Code', 'qrcode-generator' ); ?>">
+                <h2><?php esc_html_e( 'QR Code Generato', 'qrcode-generator' ); ?></h2>
+                <div id="dbqr-preview"></div>
+                <p><a id="dbqr-download" class="button" download="qrcode.png">
+                    <?php esc_html_e( 'Scarica QR Code', 'qrcode-generator' ); ?>
+                </a></p>
+                <p><strong><?php esc_html_e( 'Shortcode:', 'qrcode-generator' ); ?></strong>
+                    <code id="dbqr-shortcode"></code>
+                </p>
             </div>
-            <div id="qrcode-error" style="display:none;color:red;margin-top:20px"></div>
+            <div id="dbqr-error" style="display:none;color:red;margin-top:20px" role="alert" aria-live="assertive"></div>
         </div>
-
-        <script>
-        jQuery(document).ready(function($){
-            $('#generate-btn').on('click', function(){
-                var formData = new FormData();
-                formData.append('action',        'generate_qrcode');
-                formData.append('qr_url',        $('#qr_url').val());
-                formData.append('qr_size',       $('#qr_size').val());
-                formData.append('qrcode_nonce',  $('#qrcode_nonce').val());
-                var logo = $('#qr_logo')[0].files[0];
-                if (logo) formData.append('qr_logo', logo);
-
-                $(this).prop('disabled', true).text('Generazione in corso...');
-                $('#qrcode-error').hide();
-
-                $.ajax({
-                    url: ajaxurl, type: 'POST',
-                    data: formData, processData: false, contentType: false,
-                    success: function(r){
-                        if(r.success){
-                            $('#qrcode-preview').html('<img src="'+r.data.url+'" alt="QR Code">');
-                            $('#qrcode-download').attr('href', r.data.url);
-                            $('#qrcode-shortcode').text('[qrcode url="'+$('#qr_url').val()+'"]');
-                            $('#qrcode-result').show();
-                        } else {
-                            $('#qrcode-error').text(r.data).show();
-                        }
-                    },
-                    error: function(){ $('#qrcode-error').text('Errore di connessione. Riprova.').show(); },
-                    complete: function(){ $('#generate-btn').prop('disabled', false).text('Genera QR Code'); }
-                });
-            });
-        });
-        </script>
         <?php
     }
 
     // ── AJAX handler ─────────────────────────────────────────────────────────
 
-    public function ajax_generate_qrcode() {
+    public function ajax_generate() {
         $is_frontend = isset( $_POST['frontend'] ) && $_POST['frontend'] === '1';
 
         if ( $is_frontend ) {
-            // FIX: il frontend ora usa il proprio nonce, non bypassa la verifica
-            if ( ! check_ajax_referer( 'qrcode_frontend', 'qrcode_nonce', false ) ) {
-                wp_send_json_error( 'Verifica di sicurezza fallita.' );
+            if ( ! check_ajax_referer( 'dbqr_frontend', 'dbqr_nonce', false ) ) {
+                wp_send_json_error( __( 'Verifica di sicurezza fallita.', 'qrcode-generator' ) );
             }
-            // FIX: rate limiting per richieste pubbliche
             if ( ! $this->check_rate_limit() ) {
-                wp_send_json_error( 'Troppe richieste. Attendi un momento.' );
+                wp_send_json_error( __( 'Troppe richieste. Attendi un momento.', 'qrcode-generator' ) );
             }
         } else {
-            // Richiesta admin: nonce + capability
-            if ( ! check_ajax_referer( 'qrcode_generate', 'qrcode_nonce', false ) ) {
-                wp_send_json_error( 'Verifica di sicurezza fallita.' );
+            if ( ! check_ajax_referer( 'dbqr_admin', 'dbqr_nonce', false ) ) {
+                wp_send_json_error( __( 'Verifica di sicurezza fallita.', 'qrcode-generator' ) );
             }
             if ( ! current_user_can( 'manage_options' ) ) {
-                wp_send_json_error( 'Permessi insufficienti.' );
+                wp_send_json_error( __( 'Permessi insufficienti.', 'qrcode-generator' ) );
             }
         }
 
@@ -270,14 +274,16 @@ class QRCode_Generator_Plugin {
         $size = min( 1000, max( 100, intval( $_POST['qr_size'] ?? 300 ) ) );
 
         if ( empty( $url ) ) {
-            wp_send_json_error( 'URL o testo mancante.' );
+            wp_send_json_error( __( 'URL o testo mancante.', 'qrcode-generator' ) );
         }
 
         try {
             $result = $this->generate_qrcode( $url, $size );
             wp_send_json_success( $result );
         } catch ( Exception $e ) {
-            wp_send_json_error( 'Errore nella generazione: ' . esc_html( $e->getMessage() ) );
+            wp_send_json_error(
+                __( 'Errore nella generazione: ', 'qrcode-generator' ) . esc_html( $e->getMessage() )
+            );
         }
     }
 
@@ -285,7 +291,7 @@ class QRCode_Generator_Plugin {
 
     private function check_rate_limit(): bool {
         $ip  = $this->get_client_ip();
-        $key = 'qrcode_rl_' . md5( $ip );
+        $key = 'dbqr_rl_' . md5( $ip );
         $count = (int) get_transient( $key );
         if ( $count >= self::RATE_LIMIT ) {
             return false;
@@ -311,12 +317,11 @@ class QRCode_Generator_Plugin {
 
         if ( ! file_exists( $qrcode_dir ) ) {
             wp_mkdir_p( $qrcode_dir );
-            // Impedisci directory listing
             file_put_contents( $qrcode_dir . '/.htaccess', "Options -Indexes\n" );
         }
 
-        // FIX: caching – se esiste già un QR code per questo URL+size, restituiscilo
-        $cache_key  = 'qrcode_' . md5( $url . '_' . $size );
+        // Caching — se esiste già un QR code per questo URL+size, restituiscilo
+        $cache_key  = 'dbqr_cache_' . md5( $url . '_' . $size );
         $cached     = get_transient( $cache_key );
         if ( $cached && file_exists( $cached['path'] ) ) {
             return $cached;
@@ -336,20 +341,20 @@ class QRCode_Generator_Plugin {
         if ( isset( $_FILES['qr_logo'] ) && $_FILES['qr_logo']['error'] === UPLOAD_ERR_OK ) {
             $file = $_FILES['qr_logo'];
 
-            // FIX: verifica dimensione (max 2 MB)
             if ( $file['size'] > 2 * 1024 * 1024 ) {
-                throw new \RuntimeException( 'Il logo supera il limite di 2 MB.' );
+                throw new \RuntimeException(
+                    __( 'Il logo supera il limite di 2 MB.', 'qrcode-generator' )
+                );
             }
 
-            // FIX: verifica MIME reale (non solo l'estensione dichiarata dal client)
             $finfo     = new finfo( FILEINFO_MIME_TYPE );
             $real_mime = $finfo->file( $file['tmp_name'] );
             if ( ! in_array( $real_mime, self::ALLOWED_MIME, true ) ) {
-                throw new \RuntimeException( 'Tipo di file non consentito per il logo.' );
+                throw new \RuntimeException(
+                    __( 'Tipo di file non consentito per il logo.', 'qrcode-generator' )
+                );
             }
 
-            // FIX: logoPath() vuole un percorso file, non un data URI.
-            // Processiamo il logo con SimpleImage e lo salviamo in un file temporaneo.
             $logo_reader = new SimpleImage();
             $logo_reader->fromFile( $file['tmp_name'] )->bestFit( 100, 100 );
 
@@ -359,7 +364,7 @@ class QRCode_Generator_Plugin {
                 ->roundedRectangle( 0, 0, 110, 110, 10, 'white', 'filled' )
                 ->overlay( $logo_reader );
 
-            $logo_tmp_path = tempnam( sys_get_temp_dir(), 'qrlogo_' ) . '.png';
+            $logo_tmp_path = tempnam( sys_get_temp_dir(), 'dbqr_logo_' ) . '.png';
             $logo_builder->toFile( $logo_tmp_path, 'image/png' );
 
             $builder
@@ -368,7 +373,7 @@ class QRCode_Generator_Plugin {
         }
 
         // ── Build e salvataggio ───────────────────────────────────────────
-        $filename = 'qrcode_' . md5( $url . '_' . $size ) . '.png';
+        $filename = 'dbqr_' . md5( $url . '_' . $size ) . '.png';
         $filepath = $qrcode_dir . '/' . $filename;
 
         $result = $builder->build();
@@ -385,7 +390,6 @@ class QRCode_Generator_Plugin {
             'filename' => $filename,
         );
 
-        // Salva in cache per 24 ore
         set_transient( $cache_key, $data, DAY_IN_SECONDS );
 
         return $data;
@@ -400,130 +404,113 @@ class QRCode_Generator_Plugin {
             return;
         }
         $max_age = 30 * DAY_IN_SECONDS;
-        foreach ( glob( $qrcode_dir . '/qrcode_*.png' ) as $file ) {
+        foreach ( glob( $qrcode_dir . '/dbqr_*.png' ) as $file ) {
             if ( filemtime( $file ) < time() - $max_age ) {
                 @unlink( $file );
             }
         }
     }
 
-    // ── Shortcode [qrcode_generator] ────────────────────────────────────────
+    // ── Shortcode [dbqr_generator] ──────────────────────────────────────────
 
-    public function qrcode_generator_shortcode( $atts ) {
+    public function dbqr_generator_shortcode( $atts ) {
         $atts = shortcode_atts( array(
-            'title'     => 'Genera il tuo QR Code',
+            'title'     => __( 'Genera il tuo QR Code', 'qrcode-generator' ),
             'show_logo' => 'yes',
         ), $atts );
 
-        // Nonce per questo specifico shortcode render
-        $nonce = wp_create_nonce( 'qrcode_frontend' );
+        $nonce = wp_create_nonce( 'dbqr_frontend' );
 
         ob_start();
         ?>
-        <div class="qrcode-generator-wrapper">
-            <div class="qrcode-generator-form">
+        <div class="dbqr-wrapper">
+            <div class="dbqr-form">
                 <?php if ( ! empty( $atts['title'] ) ) : ?>
                     <h2><?php echo esc_html( $atts['title'] ); ?></h2>
                 <?php endif; ?>
 
-                <form id="qrcode-frontend-form" method="post" enctype="multipart/form-data">
-                    <div class="qrcode-form-group">
-                        <label for="qr_url_frontend">URL o Testo</label>
-                        <input type="text" id="qr_url_frontend" name="qr_url"
-                               placeholder="https://esempio.com" required>
-                        <p class="qrcode-description">Inserisci l'URL o il testo per il QR code</p>
+                <div id="dbqr-frontend-form">
+                    <div class="dbqr-form-group">
+                        <label for="dbqr-url-frontend">
+                            <?php esc_html_e( 'URL o Testo', 'qrcode-generator' ); ?>
+                        </label>
+                        <input type="text" id="dbqr-url-frontend" name="qr_url"
+                               placeholder="https://esempio.com"
+                               required
+                               aria-required="true"
+                               aria-describedby="dbqr-url-frontend-desc">
+                        <p class="dbqr-description" id="dbqr-url-frontend-desc">
+                            <?php esc_html_e( 'Inserisci l\'URL o il testo per il QR code', 'qrcode-generator' ); ?>
+                        </p>
                     </div>
 
                     <?php if ( $atts['show_logo'] === 'yes' ) : ?>
-                    <div class="qrcode-form-group">
-                        <label for="qr_logo_frontend">Logo (opzionale)</label>
-                        <input type="file" id="qr_logo_frontend" name="qr_logo"
-                               accept="image/png,image/jpeg,image/gif,image/webp">
-                        <p class="qrcode-description">PNG, JPG, GIF o WebP — max 2 MB</p>
+                    <div class="dbqr-form-group">
+                        <label for="dbqr-logo-frontend">
+                            <?php esc_html_e( 'Logo (opzionale)', 'qrcode-generator' ); ?>
+                        </label>
+                        <input type="file" id="dbqr-logo-frontend" name="qr_logo"
+                               accept="image/png,image/jpeg,image/gif,image/webp"
+                               aria-describedby="dbqr-logo-frontend-desc">
+                        <p class="dbqr-description" id="dbqr-logo-frontend-desc">
+                            <?php esc_html_e( 'PNG, JPG, GIF o WebP — max 2 MB', 'qrcode-generator' ); ?>
+                        </p>
                     </div>
                     <?php endif; ?>
 
-                    <div class="qrcode-form-group">
-                        <label for="qr_size_frontend">Dimensione (pixel)</label>
-                        <input type="number" id="qr_size_frontend" name="qr_size"
-                               value="300" min="100" max="1000">
-                        <p class="qrcode-description">Tra 100 e 1000 pixel</p>
+                    <div class="dbqr-form-group">
+                        <label for="dbqr-size-frontend">
+                            <?php esc_html_e( 'Dimensione (pixel)', 'qrcode-generator' ); ?>
+                        </label>
+                        <input type="number" id="dbqr-size-frontend" name="qr_size"
+                               value="300" min="100" max="1000"
+                               aria-describedby="dbqr-size-frontend-desc">
+                        <p class="dbqr-description" id="dbqr-size-frontend-desc">
+                            <?php esc_html_e( 'Tra 100 e 1000 pixel', 'qrcode-generator' ); ?>
+                        </p>
                     </div>
 
-                    <div class="qrcode-form-group">
-                        <button type="submit" id="generate-btn-frontend" class="qrcode-submit-btn">
-                            Genera QR Code
+                    <div class="dbqr-form-group">
+                        <button type="button" id="dbqr-generate-btn-frontend" class="dbqr-submit-btn">
+                            <?php esc_html_e( 'Genera QR Code', 'qrcode-generator' ); ?>
                         </button>
-                    </div>
-                </form>
-
-                <div id="qrcode-result-frontend" class="qrcode-result" style="display:none">
-                    <h3>Il tuo QR Code è pronto!</h3>
-                    <div id="qrcode-preview-frontend"></div>
-                    <a id="qrcode-download-frontend" class="qrcode-download-btn" download="qrcode.png">
-                        Scarica QR Code
-                    </a>
-                    <div class="qrcode-shortcode-box">
-                        <strong>Shortcode:</strong><br>
-                        <code id="qrcode-shortcode-frontend"></code>
                     </div>
                 </div>
 
-                <div id="qrcode-error-frontend" class="qrcode-error" style="display:none"></div>
+                <div id="dbqr-result-frontend" class="dbqr-result" style="display:none"
+                     role="region" aria-live="polite"
+                     aria-label="<?php esc_attr_e( 'Risultato QR Code', 'qrcode-generator' ); ?>">
+                    <h3><?php esc_html_e( 'Il tuo QR Code è pronto!', 'qrcode-generator' ); ?></h3>
+                    <div id="dbqr-preview-frontend"></div>
+                    <a id="dbqr-download-frontend" class="dbqr-download-btn" download="qrcode.png">
+                        <?php esc_html_e( 'Scarica QR Code', 'qrcode-generator' ); ?>
+                    </a>
+                    <div class="dbqr-shortcode-box">
+                        <strong><?php esc_html_e( 'Shortcode:', 'qrcode-generator' ); ?></strong><br>
+                        <code id="dbqr-shortcode-frontend"></code>
+                    </div>
+                </div>
+
+                <div id="dbqr-error-frontend" class="dbqr-error" style="display:none"
+                     role="alert" aria-live="assertive"></div>
             </div>
         </div>
-
-        <script>
-        jQuery(document).ready(function($){
-            $('#qrcode-frontend-form').on('submit', function(e){
-                e.preventDefault();
-                var formData = new FormData();
-                formData.append('action',       'generate_qrcode');
-                formData.append('qr_url',       $('#qr_url_frontend').val());
-                formData.append('qr_size',      $('#qr_size_frontend').val());
-                formData.append('frontend',     '1');
-                // FIX: nonce dedicato generato server-side per questo shortcode
-                formData.append('qrcode_nonce', '<?php echo esc_js( $nonce ); ?>');
-                var logo = $('#qr_logo_frontend')[0].files[0];
-                if (logo) formData.append('qr_logo', logo);
-
-                $('#generate-btn-frontend').prop('disabled', true).text('Generazione in corso...');
-                $('#qrcode-error-frontend').hide();
-                $('#qrcode-result-frontend').hide();
-
-                $.ajax({
-                    url: <?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>,
-                    type: 'POST', data: formData, processData: false, contentType: false,
-                    success: function(r){
-                        if(r.success){
-                            $('#qrcode-preview-frontend').html('<img src="'+r.data.url+'" alt="QR Code">');
-                            $('#qrcode-download-frontend').attr('href', r.data.url);
-                            $('#qrcode-shortcode-frontend').text('[qrcode url="'+$('#qr_url_frontend').val()+'"]');
-                            $('#qrcode-result-frontend').slideDown();
-                        } else {
-                            $('#qrcode-error-frontend').text(r.data).slideDown();
-                        }
-                    },
-                    error: function(){ $('#qrcode-error-frontend').text('Errore di connessione. Riprova.').slideDown(); },
-                    complete: function(){ $('#generate-btn-frontend').prop('disabled', false).text('Genera QR Code'); }
-                });
-            });
-        });
-        </script>
         <?php
         return ob_get_clean();
     }
 
-    // ── Shortcode [qrcode] con caching ───────────────────────────────────────
+    // ── Shortcode [dbqr_code] con caching ────────────────────────────────────
 
-    public function qrcode_shortcode( $atts ) {
+    public function dbqr_code_shortcode( $atts ) {
         $atts = shortcode_atts( array(
             'url'  => '',
             'size' => 300,
         ), $atts );
 
         if ( empty( $atts['url'] ) ) {
-            return '<p class="qrcode-error">Errore: parametro url mancante.</p>';
+            return '<p class="dbqr-error">'
+                 . esc_html__( 'Errore: parametro url mancante.', 'qrcode-generator' )
+                 . '</p>';
         }
 
         try {
@@ -531,13 +518,14 @@ class QRCode_Generator_Plugin {
                 esc_url_raw( $atts['url'] ),
                 intval( $atts['size'] )
             );
-            return '<img src="' . esc_url( $qrcode['url'] ) . '" alt="QR Code" class="qrcode-image" loading="lazy">';
+            return '<img src="' . esc_url( $qrcode['url'] ) . '" alt="QR Code" class="dbqr-image" loading="lazy">';
         } catch ( \Exception $e ) {
-            // Non esporre dettagli in frontend
-            return '<p class="qrcode-error">Errore nella generazione del QR code.</p>';
+            return '<p class="dbqr-error">'
+                 . esc_html__( 'Errore nella generazione del QR code.', 'qrcode-generator' )
+                 . '</p>';
         }
     }
 }
 
 // ── Avvia il plugin ───────────────────────────────────────────────────────────
-new QRCode_Generator_Plugin();
+new DBQR_Plugin();

@@ -1,0 +1,126 @@
+/* QR Code Generator — Frontend Styles
+ * Version: 1.2.0
+ */
+
+.dbqr-form {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+    background: #f9f9f9;
+    border-radius: 8px;
+}
+
+.dbqr-form-group {
+    margin-bottom: 20px;
+}
+
+.dbqr-form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+}
+
+.dbqr-form-group input[type="text"],
+.dbqr-form-group input[type="number"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.dbqr-form-group input[type="file"] {
+    width: 100%;
+}
+
+.dbqr-description {
+    font-size: 0.9em;
+    color: #666;
+    margin-top: 5px;
+}
+
+.dbqr-submit-btn {
+    background: #0073aa;
+    color: #fff;
+    padding: 12px 30px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    min-height: 44px;
+    min-width: 44px;
+}
+
+.dbqr-submit-btn:hover {
+    background: #005177;
+}
+
+.dbqr-submit-btn:focus-visible {
+    outline: 3px solid #0073aa;
+    outline-offset: 2px;
+}
+
+.dbqr-submit-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.dbqr-result {
+    margin-top: 30px;
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.dbqr-result img {
+    max-width: 100%;
+    height: auto;
+    margin: 20px 0;
+}
+
+.dbqr-download-btn {
+    display: inline-block;
+    background: #0073aa;
+    color: #fff;
+    padding: 10px 20px;
+    text-decoration: none;
+    border-radius: 4px;
+    margin-top: 10px;
+    min-height: 44px;
+    line-height: 24px;
+}
+
+.dbqr-download-btn:hover {
+    background: #005177;
+    color: #fff;
+}
+
+.dbqr-download-btn:focus-visible {
+    outline: 3px solid #0073aa;
+    outline-offset: 2px;
+}
+
+.dbqr-error {
+    color: red;
+    padding: 15px;
+    background: #ffebee;
+    border-radius: 4px;
+    margin-top: 20px;
+}
+
+.dbqr-shortcode-box {
+    background: #f0f0f0;
+    padding: 10px;
+    border-radius: 4px;
+    margin-top: 15px;
+    font-family: monospace;
+}
+
+/* Accessibilità: reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    .dbqr-result,
+    .dbqr-error {
+        transition: none;
+    }
+}
