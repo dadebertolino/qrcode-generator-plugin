@@ -21,23 +21,31 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.1'
+          php-version: '7.4'
+          extensions: gd, fileinfo
           tools: composer:v2
+          coverage: none
 
-      - name: Install dependencies
-        run: composer install --no-dev --optimize-autoloader --prefer-dist
+      - name: Install dependencies (composer.lock)
+        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-progress
 
+      - name: Smoke test
+        run: php tests/smoke-test.php
+
+      # La cartella nello ZIP deve chiamarsi come quella installata sui siti
+      # (qrcode-generator), altrimenti WordPress installa un secondo plugin.
       - name: Create ZIP
         run: |
-          zip -r qrcode-generator-plugin.zip . \
-            --exclude "*.git*" \
-            --exclude ".github/*" \
-            --exclude "*.DS_Store" \
-            --exclude "*.gitignore" \
-            --exclude "*.gitattributes"
+          mkdir -p build/qrcode-generator
+          rsync -a ./ build/qrcode-generator/ \
+            --exclude '.git' --exclude '.github' --exclude '.gitignore' \
+            --exclude '.DS_Store' --exclude 'build' --exclude 'tests'
+          cd build
+          zip -qr "qrcode-generator-${GITHUB_REF_NAME}.zip" qrcode-generator
+          unzip -l "qrcode-generator-${GITHUB_REF_NAME}.zip" | grep -q 'qrcode-generator/qrcode-generator.php'
 
       - name: Publish Release
         uses: softprops/action-gh-release@v3
         with:
-          files: qrcode-generator-plugin.zip
+          files: build/qrcode-generator-${{ github.ref_name }}.zip
           generate_release_notes: true
