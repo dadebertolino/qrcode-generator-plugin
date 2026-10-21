@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.1.1] - 2026-10-21
+
+### Corretto
+- ZIP da 13 MB a circa 1 MB: escluso il font di endroid/qr-code per le etichette sotto il QR (`noto_sans.otf`, 16 MB), che il plugin non usa. Con 13 MB il caricamento da WordPress falliva con "Il link che hai seguito è scaduto" sui server con limite di upload basso
+
 ## [2.1.0] - 2026-10-21
 
 Versione che sostituisce la "2.0.0" installata sui siti (il codice originale, precedente al repository): il numero più alto evita che WordPress la tratti come un ritorno indietro.
