@@ -4,9 +4,9 @@
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",
     "require": {
-        "php": ">=8.0",
-        "endroid/qr-code": "^4.0 || ^5.0",
-        "claviska/simpleimage": "^4.1"
+        "php": ">=7.4",
+        "endroid/qr-code": "^4.6",
+        "claviska/simpleimage": "^3.7 || ^4.1"
     },
     "autoload": {
         "psr-4": {}
@@ -14,7 +14,7 @@
     "config": {
         "optimize-autoloader": true,
         "platform": {
-            "php": "8.0"
+            "php": "7.4"
         }
     }
 }

@@ -43,8 +43,8 @@ Scarica lo ZIP già compilato (con `vendor/` incluso) dalla pagina [Releases](ht
 ### Da sorgente
 
 ```bash
-git clone https://github.com/dadebertolino/qrcode-generator-plugin.git wp-content/plugins/qrcode-generator-plugin
-cd wp-content/plugins/qrcode-generator-plugin
+git clone https://github.com/dadebertolino/qrcode-generator-plugin.git wp-content/plugins/qrcode-generator
+cd wp-content/plugins/qrcode-generator
 composer install --no-dev --optimize-autoloader
 ```
 
@@ -58,8 +58,10 @@ Dal pannello WordPress: **Plugin → Plugin installati → QR Code Generator con
 
 | Pacchetto | Versione | Utilizzo |
 |---|---|---|
-| [`endroid/qr-code`](https://github.com/endroid/qr-code) | ^4.0 \|\| ^5.0 | Generazione QR code |
-| [`claviska/simpleimage`](https://github.com/claviska/SimpleImage) | ^4.1 | Elaborazione logo |
+| [`endroid/qr-code`](https://github.com/endroid/qr-code) | ^4.6 (la 5 ha un'interfaccia diversa e non è supportata) | Generazione QR code |
+| [`claviska/simpleimage`](https://github.com/claviska/SimpleImage) | ^3.7 \|\| ^4.1 | Elaborazione logo |
+
+Le versioni sono fissate in `composer.lock`, risolto per PHP 7.4: lo stesso ZIP funziona da PHP 7.4 a 8.x.
 
 ---
 
