@@ -3,7 +3,7 @@
  * Plugin Name: QR Code Generator con Logo
  * Plugin URI:  https://www.davidebertolino.it/progetti/qrcode-generator/
  * Description: Genera QR code personalizzati con logo centrale
- * Version:     2.1.0
+ * Version:     2.1.1
  * Author:      Davide Bertolino
  * Author URI:  https://www.davidebertolino.it
  * License:     GPL2
@@ -51,7 +51,7 @@ use claviska\SimpleImage;
 // ─── Costanti ────────────────────────────────────────────────────────────────
 define( 'DBQR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DBQR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
-define( 'DBQR_VERSION',    '2.1.0' );
+define( 'DBQR_VERSION',    '2.1.1' );
 
 // ─── Hook attivazione / disattivazione ───────────────────────────────────────
 register_activation_hook( __FILE__, array( 'DBQR_Plugin', 'on_activate' ) );

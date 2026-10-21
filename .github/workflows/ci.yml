@@ -33,6 +33,11 @@ jobs:
       - name: Install dependencies (composer.lock)
         run: composer install --no-dev --prefer-dist --no-progress
 
+      # Font di endroid per le etichette sotto il QR (16 MB): il plugin non usa
+      # etichette. Senza, lo ZIP passa da 13 MB a circa 1 MB.
+      - name: Rimuovi font etichette (non usato)
+        run: rm -f vendor/endroid/qr-code/assets/*.otf vendor/endroid/qr-code/assets/*.ttf
+
       - name: Sintassi
         run: |
           for f in qrcode-generator.php tests/*.php; do php -l "$f"; done
